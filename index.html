@@ -1,0 +1,237 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>STARFALL — Guardians of the Light | Destiny-like 3D FPS</title>
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>✦</text></svg>">
+<style>
+  :root{
+    --cyan:#7df9ff; --gold:#f5c542; --violet:#9d6bff; --bg:#060a14;
+    --hud-bg:rgba(6,12,24,.62); --line:rgba(125,249,255,.25);
+  }
+  *{margin:0;padding:0;box-sizing:border-box}
+  html,body{width:100%;height:100%;overflow:hidden;background:var(--bg);font-family:"Segoe UI",Roboto,Inter,Arial,sans-serif;color:#e8f4ff;user-select:none}
+  #app{position:fixed;inset:0}
+  canvas#game{position:absolute;inset:0;width:100%;height:100%;display:block}
+  /* ---------- HUD ---------- */
+  #hud{position:absolute;inset:0;pointer-events:none;opacity:0;transition:opacity .4s;z-index:5}
+  #hud.on{opacity:1}
+  #crosshair{position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);width:26px;height:26px}
+  #crosshair::before,#crosshair::after{content:"";position:absolute;background:rgba(255,255,255,.9);box-shadow:0 0 6px var(--cyan)}
+  #crosshair::before{left:50%;top:0;width:2px;height:100%;transform:translateX(-50%);clip-path:polygon(0 0,100% 0,100% 32%,0 32%,0 68%,100% 68%,100% 100%,0 100%)}
+  #crosshair::after{top:50%;left:0;height:2px;width:100%;transform:translateY(-50%);clip-path:polygon(0 0,32% 0,32% 100%,0 100%,68% 0,100% 0,100% 100%,68% 100%)}
+  #crosshair .dot{position:absolute;left:50%;top:50%;width:4px;height:4px;background:var(--cyan);border-radius:50%;transform:translate(-50%,-50%);box-shadow:0 0 8px var(--cyan)}
+  #crosshair.hit{filter:hue-rotate(-60deg) brightness(1.8)}
+  #crosshair.ads{transform:translate(-50%,-50%) scale(.55)}
+  #hitmarker{position:absolute;left:50%;top:50%;width:34px;height:34px;transform:translate(-50%,-50%) rotate(45deg);opacity:0}
+  #hitmarker span{position:absolute;background:#fff;box-shadow:0 0 8px #ff5252}
+  #hitmarker span:nth-child(1){top:0;left:50%;width:2px;height:10px}
+  #hitmarker span:nth-child(2){bottom:0;left:50%;width:2px;height:10px}
+  #hitmarker span:nth-child(3){left:0;top:50%;height:2px;width:10px}
+  #hitmarker span:nth-child(4){right:0;top:50%;height:2px;width:10px}
+  #hitmarker.show{animation:hit .22s ease-out}
+  #hitmarker.kill span{background:#f5c542;box-shadow:0 0 12px #f5c542}
+  @keyframes hit{0%{opacity:1;transform:translate(-50%,-50%) rotate(45deg) scale(1.4)}100%{opacity:0;transform:translate(-50%,-50%) rotate(45deg) scale(.9)}}
+  /* bottom left vitals */
+  #vitals{position:absolute;left:22px;bottom:20px;min-width:320px;background:var(--hud-bg);border:1px solid var(--line);border-left:3px solid var(--cyan);padding:12px 14px;backdrop-filter:blur(8px);clip-path:polygon(0 0,100% 0,100% calc(100% - 14px),calc(100% - 14px) 100%,0 100%)}
+  #classLabel{font-size:11px;letter-spacing:2.5px;color:var(--cyan);font-weight:700}
+  #lvlLabel{font-size:11px;letter-spacing:1.5px;color:#9fb6cc;float:right}
+  .bar{height:10px;background:rgba(255,255,255,.12);margin-top:7px;position:relative;overflow:hidden}
+  .bar>i{position:absolute;inset:0;transform-origin:left;transition:transform .18s}
+  #shieldBar>i{background:linear-gradient(90deg,#7df9ff,#3aa0ff);box-shadow:0 0 12px #7df9ff}
+  #hpBar{height:12px}
+  #hpBar>i{background:linear-gradient(90deg,#ff5d5d,#ffb35d)}
+  #hpText{font-size:12px;margin-top:4px;color:#cfe6ff;font-variant-numeric:tabular-nums}
+  #abilities{position:absolute;left:22px;bottom:132px;display:flex;gap:10px}
+  .ab{width:58px;height:58px;background:var(--hud-bg);border:1px solid var(--line);display:flex;flex-direction:column;align-items:center;justify-content:center;position:relative;backdrop-filter:blur(6px)}
+  .ab b{font-size:20px;line-height:1}
+  .ab small{font-size:9px;letter-spacing:1px;color:#9fb6cc;margin-top:3px}
+  .ab .cd{position:absolute;inset:0;background:rgba(0,0,0,.72);display:flex;align-items:center;justify-content:center;font-weight:800;font-size:16px;color:#fff}
+  .ab.ready{border-color:var(--gold);box-shadow:0 0 12px rgba(245,197,66,.45)}
+  #superWrap{position:absolute;left:22px;bottom:200px;width:200px;background:var(--hud-bg);border:1px solid rgba(245,197,66,.4);padding:8px 10px;backdrop-filter:blur(6px)}
+  #superWrap label{font-size:10px;letter-spacing:2px;color:var(--gold);font-weight:800}
+  #superBar{height:8px;background:rgba(255,255,255,.12);margin-top:6px;overflow:hidden}
+  #superBar>i{display:block;height:100%;width:0%;background:linear-gradient(90deg,#f5c542,#ff8a3d,#ff5252);box-shadow:0 0 12px #f5c542}
+  /* bottom right weapon */
+  #weaponBox{position:absolute;right:22px;bottom:20px;text-align:right;background:var(--hud-bg);border:1px solid var(--line);border-right:3px solid var(--gold);padding:12px 16px;min-width:270px;backdrop-filter:blur(8px)}
+  #wName{font-size:13px;font-weight:800;letter-spacing:1.2px;color:#fff}
+  #wType{font-size:10px;letter-spacing:2px;color:var(--gold)}
+  #ammo{font-size:42px;font-weight:900;line-height:1;font-variant-numeric:tabular-nums}
+  #ammo small{font-size:16px;color:#9fb6cc;font-weight:600}
+  #slots{display:flex;gap:6px;justify-content:flex-end;margin-top:6px}
+  .slot{font-size:10px;padding:3px 8px;border:1px solid rgba(255,255,255,.2);letter-spacing:1px;color:#9fb6cc}
+  .slot.active{background:var(--gold);color:#111;border-color:var(--gold);font-weight:800}
+  /* top */
+  #topbar{position:absolute;top:16px;left:50%;transform:translateX(-50%);text-align:center;background:var(--hud-bg);border:1px solid var(--line);padding:8px 26px;backdrop-filter:blur(8px);min-width:420px}
+  #objective{font-size:12px;letter-spacing:2px;color:var(--cyan);font-weight:700}
+  #wave{font-size:22px;font-weight:900;letter-spacing:1px}
+  #enemiesLeft{font-size:11px;color:#9fb6cc;letter-spacing:1.5px}
+  #bossBar{margin-top:6px;display:none}
+  #bossBar label{font-size:10px;letter-spacing:3px;color:#ff6b6b}
+  #bossHp{height:8px;background:rgba(255,255,255,.12);margin-top:4px}
+  #bossHp>i{display:block;height:100%;background:linear-gradient(90deg,#ff2d2d,#ff8a3d)}
+  #scoreBox{position:absolute;top:16px;right:22px;background:var(--hud-bg);border:1px solid var(--line);padding:10px 14px;text-align:right;backdrop-filter:blur(8px)}
+  #scoreBox .s{font-size:20px;font-weight:900;color:var(--gold);font-variant-numeric:tabular-nums}
+  #scoreBox .g{font-size:12px;color:var(--cyan)}
+  #killfeed{position:absolute;top:110px;right:22px;display:flex;flex-direction:column;gap:5px;align-items:flex-end;max-width:320px}
+  .kf{font-size:12px;background:rgba(0,0,0,.6);border-right:2px solid var(--gold);padding:5px 10px;animation:kfin .25s ease-out}
+  @keyframes kfin{from{transform:translateX(30px);opacity:0}to{transform:none;opacity:1}}
+  #radar{position:absolute;top:16px;left:22px;width:148px;height:148px;border-radius:50%;border:2px solid rgba(125,249,255,.5);background:radial-gradient(circle,rgba(10,25,45,.85),rgba(4,8,18,.9));box-shadow:0 0 20px rgba(125,249,255,.25),inset 0 0 30px rgba(0,0,0,.6);overflow:hidden}
+  #dmgVignette{position:absolute;inset:0;pointer-events:none;box-shadow:inset 0 0 120px 40px rgba(255,30,30,.55);opacity:0;transition:opacity .15s}
+  #healVignette{position:absolute;inset:0;pointer-events:none;box-shadow:inset 0 0 120px 30px rgba(125,249,255,.35);opacity:0;transition:opacity .3s}
+  #dmgDir{position:absolute;left:50%;top:50%;width:120px;height:120px;transform:translate(-50%,-50%);opacity:0}
+  #toast{position:absolute;top:32%;left:50%;transform:translateX(-50%);text-align:center;pointer-events:none}
+  #toast h2{font-size:42px;font-weight:900;letter-spacing:4px;text-shadow:0 0 24px var(--cyan)}
+  #toast p{letter-spacing:3px;font-size:13px;color:var(--gold)}
+  #interact{position:absolute;left:50%;bottom:32%;transform:translateX(-50%);font-size:14px;background:rgba(0,0,0,.65);border:1px solid var(--cyan);padding:8px 16px;display:none;letter-spacing:1px}
+  #dmgNums{position:absolute;inset:0;overflow:hidden}
+  .dmgnum{position:absolute;font-weight:900;font-size:16px;color:#fff;text-shadow:0 0 6px #000,0 0 12px var(--cyan);transform:translate(-50%,-50%);animation:floatup .8s ease-out forwards}
+  .dmgnum.crit{color:var(--gold);font-size:22px;text-shadow:0 0 10px #ff8a00}
+  .dmgnum.player{color:#ff6b6b}
+  @keyframes floatup{0%{opacity:1;margin-top:0}100%{opacity:0;margin-top:-60px}}
+  /* ---------- Screens ---------- */
+  .screen{position:absolute;inset:0;z-index:20;display:flex;align-items:center;justify-content:center;background:radial-gradient(ellipse at 50% 30%,rgba(40,70,140,.55),rgba(3,6,14,.92) 70%),linear-gradient(rgba(4,8,18,.55),rgba(4,8,18,.88));backdrop-filter:blur(4px)}
+  .hidden{display:none!important}
+  .panel{width:min(980px,94vw);max-height:92vh;overflow:auto;background:linear-gradient(180deg,rgba(14,24,44,.96),rgba(6,10,22,.97));border:1px solid rgba(125,249,255,.35);box-shadow:0 0 60px rgba(125,249,255,.15);padding:34px 38px;clip-path:polygon(0 0,calc(100% - 26px) 0,100% 26px,100% 100%,26px 100%,0 calc(100% - 26px))}
+  .eyebrow{letter-spacing:5px;font-size:11px;color:var(--cyan);font-weight:800}
+  h1.title{font-size:56px;font-weight:900;letter-spacing:2px;line-height:1;margin:8px 0}
+  h1.title span{background:linear-gradient(90deg,#7df9ff,#9d6bff,#f5c542);-webkit-background-clip:text;background-clip:text;color:transparent}
+  .sub{color:#9fb6cc;font-size:14px;max-width:640px;line-height:1.6}
+  #classRow{display:grid;grid-template-columns:repeat(3,1fr);gap:14px;margin:20px 0}
+  .classCard{border:1px solid rgba(255,255,255,.15);padding:16px;cursor:pointer;background:rgba(255,255,255,.03);transition:.15s;pointer-events:auto}
+  .classCard:hover{transform:translateY(-3px);border-color:var(--cyan)}
+  .classCard.sel{border-color:var(--gold);box-shadow:0 0 22px rgba(245,197,66,.35);background:rgba(245,197,66,.07)}
+  .classCard .ico{font-size:34px}
+  .classCard h3{letter-spacing:2px;font-size:16px;margin:8px 0 4px}
+  .classCard p{font-size:12px;color:#9fb6cc;line-height:1.5;min-height:54px}
+  .stat{display:flex;align-items:center;gap:8px;font-size:11px;margin-top:4px;color:#cfe6ff}
+  .stat i{flex:1;height:5px;background:rgba(255,255,255,.12);position:relative;display:block}
+  .stat i b{position:absolute;inset:0;background:var(--cyan)}
+  .btnRow{display:flex;gap:12px;margin-top:18px;flex-wrap:wrap}
+  button{pointer-events:auto;cursor:pointer;font-weight:800;letter-spacing:2px;font-size:14px;padding:14px 30px;border:1px solid var(--cyan);background:linear-gradient(90deg,rgba(125,249,255,.22),rgba(157,107,255,.22));color:#fff;transition:.15s}
+  button:hover{background:linear-gradient(90deg,rgba(125,249,255,.45),rgba(157,107,255,.45));box-shadow:0 0 20px rgba(125,249,255,.4)}
+  button.primary{background:linear-gradient(90deg,#f5c542,#ff8a3d);border-color:#f5c542;color:#111}
+  button.ghost{background:transparent}
+  .controlsGrid{display:grid;grid-template-columns:1fr 1fr;gap:6px 26px;margin-top:14px;font-size:13px;color:#cfe6ff}
+  .controlsGrid kbd{background:#0e1a30;border:1px solid var(--line);border-bottom-width:3px;padding:2px 8px;border-radius:4px;font-family:monospace;font-size:12px;margin-right:8px;white-space:nowrap}
+  .settings{display:flex;gap:18px;margin-top:14px;flex-wrap:wrap;font-size:13px}
+  .settings label{display:flex;flex-direction:column;gap:6px;color:#9fb6cc;letter-spacing:1px;font-size:11px}
+  .settings input,.settings select{background:#0e1a30;color:#fff;border:1px solid var(--line);padding:8px 10px;pointer-events:auto}
+  #loadingBar{height:6px;background:rgba(255,255,255,.1);margin-top:16px;overflow:hidden}
+  #loadingBar>i{display:block;height:100%;width:30%;background:var(--cyan);animation:load 1.2s infinite}
+  @keyframes load{0%{margin-left:-30%}100%{margin-left:100%}}
+  #deathScreen .panel{border-color:rgba(255,60,60,.5);text-align:center}
+  #pauseScreen .panel{max-width:640px}
+  .foot{margin-top:14px;font-size:11px;color:#5c738c;letter-spacing:1px}
+  #fps{position:absolute;bottom:6px;left:50%;transform:translateX(-50%);font-size:10px;color:rgba(255,255,255,.35);letter-spacing:1px;font-family:monospace}
+  @media(max-width:800px){#classRow{grid-template-columns:1fr}h1.title{font-size:36px}#topbar{min-width:0;width:92vw}#vitals{min-width:0;width:60vw}}
+</style>
+<script type="importmap">
+{"imports":{"three":"https://unpkg.com/three@0.160.0/build/three.module.js","three/addons/":"https://unpkg.com/three@0.160.0/examples/jsm/"}}
+</script>
+</head>
+<body>
+<div id="app">
+  <canvas id="game"></canvas>
+  <div id="hud">
+    <div id="dmgVignette"></div><div id="healVignette"></div>
+    <svg id="dmgDir" viewBox="0 0 100 100"><path d="M50 2 L62 30 L38 30 Z" fill="rgba(255,40,40,.9)"/></svg>
+    <canvas id="radar" width="148" height="148"></canvas>
+    <div id="topbar">
+      <div id="objective">DEFEND THE BEACON</div>
+      <div id="wave">WAVE 1</div>
+      <div id="enemiesLeft">HOSTILES: 0</div>
+      <div id="bossBar"><label>⬢ WARDEN OF THE DARK</label><div id="bossHp"><i style="width:100%"></i></div></div>
+    </div>
+    <div id="scoreBox"><div class="s" id="score">0</div><div style="font-size:10px;letter-spacing:2px;color:#9fb6cc">SCORE</div><div class="g" id="glimmer">✦ 0 GLIMMER</div></div>
+    <div id="killfeed"></div>
+    <div id="crosshair"><div class="dot"></div></div>
+    <div id="hitmarker"><span></span><span></span><span></span><span></span></div>
+    <div id="toast"></div>
+    <div id="interact">Hold <b>E</b> to capture</div>
+    <div id="dmgNums"></div>
+    <div id="superWrap"><label>◆ SUPER — <span id="superName">GOLDEN GUN</span> [X]</label><div id="superBar"><i></i></div></div>
+    <div id="abilities">
+      <div class="ab" id="abGrenade"><b>✸</b><small>GRENADE [E]</small><div class="cd hidden">5</div></div>
+      <div class="ab" id="abMelee"><b>⚔</b><small>MELEE [F]</small><div class="cd hidden">3</div></div>
+      <div class="ab" id="abRift"><b>⬢</b><small>RIFT [C]</small><div class="cd hidden">10</div></div>
+    </div>
+    <div id="vitals">
+      <span id="classLabel">STRIDER • LVL 1</span><span id="lvlLabel">LIGHT 1350</span>
+      <div class="bar" id="shieldBar"><i></i></div>
+      <div class="bar" id="hpBar"><i></i></div>
+      <div id="hpText">100 HP • 100 SHIELD — double-jump with SPACE</div>
+    </div>
+    <div id="weaponBox">
+      <div id="wType">KINETIC • AUTO</div><div id="wName">KHVOSTOK-7 AUTO RIFLE</div>
+      <div id="ammo">30 <small>/ 180</small></div>
+      <div id="slots"><span class="slot active">1 AUTO</span><span class="slot">2 CANNON</span><span class="slot">3 ROCKET</span></div>
+      <div style="font-size:10px;color:#9fb6cc;letter-spacing:1px;margin-top:4px">LMB fire • RMB aim • R reload • SHIFT sprint</div>
+    </div>
+    <div id="fps">60 FPS • click to lock mouse</div>
+  </div>
+
+  <div id="menuScreen" class="screen">
+    <div class="panel">
+      <div class="eyebrow">BUNGIE-LIKE SCI-FI FPS • DESKTOP 3D • THREE.JS</div>
+      <h1 class="title">STARFALL<br><span>GUARDIANS OF THE LIGHT</span></h1>
+      <p class="sub">The Traveler hangs broken above Vostok-9. The Fallen-like <b>Husk Horde</b> pours through the breach. Pick your Guardian class, grab your Light, and hold the Beacon. Chain kills to charge your <b style="color:#f5c542">Super</b>, grab glimmer, survive 10 waves and slay the <b style="color:#ff6b6b">Warden of the Dark</b>.</p>
+      <div id="classRow">
+        <div class="classCard sel" data-class="strider"><div class="ico">🦅</div><h3>STRIDER <span style="color:#7df9ff">• HUNTER</span></h3><p>Agile scout. Triple jump, fast reload, Golden Gun super — 3 precision solar shots.</p><div class="stat">MOBILITY <i><b style="width:95%"></b></i></div><div class="stat">RESILIENCE <i><b style="width:40%;background:#ff8a3d"></b></i></div><div class="stat">RECOVERY <i><b style="width:65%"></b></i></div></div>
+        <div class="classCard" data-class="bulwark"><div class="ico">🛡️</div><h3>BULWARK <span style="color:#9d6bff">• TITAN</span></h3><p>Walking wall. +50 HP, barricade shield, Fist of Havoc slam. Punch everything.</p><div class="stat">MOBILITY <i><b style="width:40%"></b></i></div><div class="stat">RESILIENCE <i><b style="width:98%;background:#9d6bff"></b></i></div><div class="stat">RECOVERY <i><b style="width:45%"></b></i></div></div>
+        <div class="classCard" data-class="arcanist"><div class="ico">🔮</div><h3>ARCANIST <span style="color:#f5c542">• WARLOCK</span></h3><p>Space wizard. Glide jump, fast ability regen, Nova Bomb that vaporizes rooms.</p><div class="stat">MOBILITY <i><b style="width:55%"></b></i></div><div class="stat">RESILIENCE <i><b style="width:55%;background:#ff8a3d"></b></i></div><div class="stat">RECOVERY <i><b style="width:95%;background:#f5c542"></b></i></div></div>
+      </div>
+      <div class="controlsGrid">
+        <div><kbd>W A S D</kbd> move <kbd>SHIFT</kbd> sprint <kbd>SPACE</kbd> jump / double-jump</div>
+        <div><kbd>MOUSE</kbd> look <kbd>LMB</kbd> fire <kbd>RMB</kbd> aim <kbd>R</kbd> reload</div>
+        <div><kbd>1 2 3</kbd> weapons <kbd>E</kbd> grenade <kbd>F</kbd> melee <kbd>C</kbd> rift</div>
+        <div><kbd>X</kbd> SUPER when charged <kbd>P / ESC</kbd> pause <kbd>M</kbd> mute</div>
+      </div>
+      <div class="settings">
+        <label>SENSITIVITY<input id="setSens" type="range" min="0.3" max="3" step="0.1" value="1"></label>
+        <label>QUALITY<select id="setQuality"><option value="high">HIGH</option><option value="med" selected>MEDIUM</option><option value="low">LOW</option></select></label>
+        <label>VOLUME<input id="setVol" type="range" min="0" max="1" step="0.05" value="0.5"></label>
+      </div>
+      <div class="btnRow"><button class="primary" id="btnDeploy">▶ DEPLOY GUARDIAN</button><button class="ghost" id="btnHow">HOW TO PLAY</button></div>
+      <div id="loadingBar" class="hidden"><i></i></div>
+      <div class="foot">Desktop + mouse recommended • Click DEPLOY then click the world to lock aim • Best on Chrome/Edge • v1.0</div>
+    </div>
+  </div>
+
+  <div id="helpScreen" class="screen hidden">
+    <div class="panel"><div class="eyebrow">FIELD MANUAL</div>
+      <h1 class="title" style="font-size:36px">HOW TO PLAY</h1>
+      <p class="sub">• <b>Shields (blue)</b> regen after 4s without damage. <b>HP (red)</b> regens slower — grab <b style="color:#7df9ff">Light Orbs</b> (cyan) dropped by majors to heal.<br>• <b>Grenade [E]</b>: solar vortex, big DoT. <b>Melee [F]</b>: knife lunge when close. <b>Rift [C]</b>: healing circle.<br>• <b>Super [X]</b>: class ultimate at 100%. Kills feed charge (+6%), precision kills +10%.<br>• <b>Weapons</b>: 1 auto-rifle (adds), 2 hand-cannon (precision ×2 headshot), 3 rocket (splash + boss DPS, watch the blast!).<br>• <b>Waves</b>: each wave spawns Thralls (rush), Acolytes (shoot), Knights (tanky). Wave 5 & 10 = WARDEN boss.<br>• <b>Glimmer ✦</b> = score currency. Spend nothing — flex it.</p>
+      <div class="btnRow"><button id="btnBack">← BACK</button></div>
+    </div>
+  </div>
+
+  <div id="pauseScreen" class="screen hidden">
+    <div class="panel"><div class="eyebrow">GHOST // PAUSED</div>
+      <h1 class="title" style="font-size:40px">PAUSED</h1>
+      <p class="sub" id="pauseStats">Take a breath, Guardian.</p>
+      <div class="btnRow"><button class="primary" id="btnResume">RESUME</button><button id="btnRestart">RESTART RUN</button><button class="ghost" id="btnQuit">CHANGE CLASS</button></div>
+    </div>
+  </div>
+
+  <div id="deathScreen" class="screen hidden">
+    <div class="panel"><div class="eyebrow" style="color:#ff6b6b">GHOST: "GUARDIAN DOWN!"</div>
+      <h1 class="title" style="font-size:44px">YOU DIED</h1>
+      <p class="sub" id="deathStats"></p>
+      <div class="btnRow"><button class="primary" id="btnRevive">✦ REVIVE (WAVE RESTART)</button><button class="ghost" id="btnMenu2">CHANGE CLASS</button></div>
+    </div>
+  </div>
+
+  <div id="winScreen" class="screen hidden">
+    <div class="panel" style="text-align:center;border-color:var(--gold)">
+      <div class="eyebrow" style="color:var(--gold)">✦ LEGEND MADE ✦</div>
+      <h1 class="title" style="font-size:46px">WARDEN <span>FELLED</span></h1>
+      <p class="sub" id="winStats" style="margin:0 auto"></p>
+      <div class="btnRow" style="justify-content:center"><button class="primary" id="btnAgain">PLAY AGAIN</button></div>
+    </div>
+  </div>
+</div>
+<script type="module" src="./game.js"></script>
+</body>
+</html>
